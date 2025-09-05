@@ -2,14 +2,18 @@
 
 import logging
 
+from common_grants_sdk.schemas.marshmallow import Error as ErrorSchema
 from common_grants_sdk.schemas.marshmallow import (
-    Error as ErrorSchema,
     OpportunitiesListResponse as OpportunitiesListResponseSchema,
-    OpportunitiesSearchResponse as OpportunitiesSearchResponseSchema,
-    OpportunityResponse as OpportunityResponseSchema,
-    OpportunitySearchRequest as OpportunitySearchRequestSchema,
-    PaginatedQueryParams as PaginatedQueryParamsSchema,
 )
+from common_grants_sdk.schemas.marshmallow import (
+    OpportunitiesSearchResponse as OpportunitiesSearchResponseSchema,
+)
+from common_grants_sdk.schemas.marshmallow import OpportunityResponse as OpportunityResponseSchema
+from common_grants_sdk.schemas.marshmallow import (
+    OpportunitySearchRequest as OpportunitySearchRequestSchema,
+)
+from common_grants_sdk.schemas.marshmallow import PaginatedQueryParams as PaginatedQueryParamsSchema
 from common_grants_sdk.schemas.pydantic.requests.opportunity import OpportunitySearchRequest
 
 import src.adapters.db as db
