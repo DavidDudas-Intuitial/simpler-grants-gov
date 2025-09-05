@@ -2,23 +2,20 @@
 
 import logging
 
-from common_grants_sdk.schemas.marshmallow import Error as ErrorSchema
 from common_grants_sdk.schemas.marshmallow import (
+    Error as ErrorSchema,
     OpportunitiesListResponse as OpportunitiesListResponseSchema,
-)
-from common_grants_sdk.schemas.marshmallow import (
     OpportunitiesSearchResponse as OpportunitiesSearchResponseSchema,
-)
-from common_grants_sdk.schemas.marshmallow import OpportunityResponse as OpportunityResponseSchema
-from common_grants_sdk.schemas.marshmallow import (
+    OpportunityResponse as OpportunityResponseSchema,
     OpportunitySearchRequest as OpportunitySearchRequestSchema,
+    PaginatedQueryParams as PaginatedQueryParamsSchema,
 )
-from common_grants_sdk.schemas.marshmallow import PaginatedQueryParams as PaginatedQueryParamsSchema
 from common_grants_sdk.schemas.pydantic.requests.opportunity import OpportunitySearchRequest
 
 import src.adapters.db as db
 import src.adapters.db.flask_db as flask_db
 from src.api.common_grants.common_grants_blueprint import common_grants_blueprint
+from src.auth.api_key_auth import api_key_auth
 from src.services.common_grants.opportunity_service import CommonGrantsOpportunityService
 
 logger = logging.getLogger(__name__)
@@ -59,6 +56,7 @@ def generate_404_error(
 @common_grants_blueprint.get("/opportunities")
 @common_grants_blueprint.input(PaginatedQueryParamsSchema, location="query")
 @common_grants_blueprint.output(OpportunitiesListResponseSchema)
+@common_grants_blueprint.auth_required(api_key_auth)
 @common_grants_blueprint.doc(
     summary="List opportunities",
     description="Get a paginated list of opportunities, sorted by `lastModifiedAt` with most recent first.",
@@ -83,6 +81,7 @@ def list_opportunities(db_session: db.Session, query_data: dict) -> tuple[dict, 
 
 @common_grants_blueprint.get("/opportunities/<oppId>")
 @common_grants_blueprint.output(OpportunityResponseSchema)
+@common_grants_blueprint.auth_required(api_key_auth)
 @common_grants_blueprint.doc(
     summary="View opportunity details",
     description="View details about an opportunity",
@@ -110,6 +109,7 @@ def get_opportunity(db_session: db.Session, oppId: str) -> tuple[dict, int]:
 @common_grants_blueprint.post("/opportunities/search")
 @common_grants_blueprint.input(OpportunitySearchRequestSchema)
 @common_grants_blueprint.output(OpportunitiesSearchResponseSchema)
+@common_grants_blueprint.auth_required(api_key_auth)
 @common_grants_blueprint.doc(
     summary="Search opportunities",
     description="Search for opportunities based on the provided filters",
