@@ -1,6 +1,7 @@
 """CommonGrants Protocol routes."""
 
 import logging
+from uuid import UUID
 
 from common_grants_sdk.schemas.marshmallow import (
     OpportunitiesListResponse as OpportunitiesListResponseSchema,
@@ -13,7 +14,8 @@ from common_grants_sdk.schemas.marshmallow import (
     OpportunitySearchRequest as OpportunitySearchRequestSchema,
 )
 from common_grants_sdk.schemas.marshmallow import PaginatedQueryParams as PaginatedQueryParamsSchema
-from common_grants_sdk.schemas.pydantic.requests.opportunity import OpportunitySearchRequest
+from common_grants_sdk.schemas.pydantic import OpportunitySearchRequest, PaginatedBodyParams
+from pydantic import ValidationError
 
 import src.adapters.db as db
 import src.adapters.db.flask_db as flask_db
@@ -24,6 +26,7 @@ from src.api.route_utils import raise_flask_error
 from src.auth.multi_auth import api_key_multi_auth, api_key_multi_auth_security_schemes
 from src.logging.flask_logger import add_extra_data_to_current_request_logs
 from src.services.common_grants.opportunity_service import CommonGrantsOpportunityService
+from src.services.common_grants.transformation import transform_validation_error_from_cg
 
 logger = logging.getLogger(__name__)
 
@@ -45,11 +48,15 @@ def list_opportunities(search_client: search.SearchClient, query_data: dict) -> 
     logger.info("GET /common-grants/opportunities/")
 
     # Fetch data from service
-    response_object = CommonGrantsOpportunityService.list_opportunities(
-        search_client=search_client,
-        page=int(query_data.get("page", 1)),
-        page_size=int(query_data.get("pageSize", 10)),
-    )
+    try:
+        pagination = PaginatedBodyParams(**query_data)
+        response_object = CommonGrantsOpportunityService.list_opportunities(
+            search_client=search_client,
+            pagination=pagination,
+        )
+    except ValidationError as e:
+        validation_details = transform_validation_error_from_cg(e)
+        raise_flask_error(422, "Validation error", validation_issues=validation_details)
 
     return response_object, 200
 
@@ -69,13 +76,25 @@ def get_opportunity(db_session: db.Session, oppId: str) -> tuple[dict, int]:
     add_extra_data_to_current_request_logs({"oppId": oppId})
     logger.info("GET /common-grants/opportunities/{oppId}")
 
+    message_404 = "The server cannot find the requested resource"
+
+    # Validate input
+    try:
+        opp_uuid = UUID(oppId)
+    except ValueError:
+        raise_flask_error(404, message_404)
+
     # Fetch data from service
-    with db_session.begin():
-        response_object = CommonGrantsOpportunityService.get_opportunity(db_session, oppId)
+    try:
+        with db_session.begin():
+            response_object = CommonGrantsOpportunityService.get_opportunity(db_session, opp_uuid)
+    except ValidationError as e:
+        validation_details = transform_validation_error_from_cg(e)
+        raise_flask_error(422, "Validation error", validation_issues=validation_details)
 
     # Check for not found condition
     if not response_object:
-        raise_flask_error(404, "The server cannot find the requested resource")
+        raise_flask_error(404, message_404)
 
     return response_object, 200
 
@@ -96,21 +115,19 @@ def search_opportunities(search_client: search.SearchClient, json_data: dict) ->
     add_extra_data_to_current_request_logs(json_data)
     logger.info("POST /common-grants/opportunities/search")
 
-    # Validate input
-    request_schema = OpportunitySearchRequestSchema()
     try:
-        validated_input = request_schema.load(json_data)
-        search_request = OpportunitySearchRequest(**validated_input)
-    except Exception:
-        raise_flask_error(422, "Unable to validate search request schema")
+        # Transform json data to CG schema
+        search_request = OpportunitySearchRequest(**json_data)
 
-    # Perform search
-    response_object = CommonGrantsOpportunityService.search_opportunities(
-        search_client,
-        search_request.filters,
-        search_request.sorting,
-        search_request.pagination,
-        search_request.search,
-    )
+        # Perform search
+        response_object = CommonGrantsOpportunityService.search_opportunities(
+            search_client,
+            search_request,
+        )
+    except ValidationError as e:
+        validation_details = transform_validation_error_from_cg(e)
+        raise_flask_error(
+            422, "Unable to process search request", validation_issues=validation_details
+        )
 
     return response_object, 200

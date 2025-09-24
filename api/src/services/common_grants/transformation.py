@@ -1,7 +1,8 @@
-"""Transformation utilities for converting SGG v1 models to/from CG models."""
+"""Transformation utilities for transforming SGG v1 models to/from CG models."""
 
 import logging
 from datetime import date, datetime, timezone
+from typing import List
 from urllib.parse import urlparse
 
 from common_grants_sdk.schemas.pydantic import (
@@ -19,9 +20,12 @@ from common_grants_sdk.schemas.pydantic import (
     PaginatedBodyParams,
     SingleDateEvent,
 )
+from pydantic import ValidationError
 
+from src.api.response import ValidationErrorDetail
 from src.constants.lookup_constants import OpportunityStatus
 from src.db.models.opportunity_models import Opportunity, OpportunitySummary
+from src.validation.validation_constants import ValidationErrorType
 
 logger = logging.getLogger(__name__)
 
@@ -176,7 +180,7 @@ def validate_url(value: str | None) -> str | None:
     return None
 
 
-def transform_opportunity_to_cg(v1_opportunity: Opportunity) -> OpportunityBase:
+def transform_opportunity_to_cg(v1_opportunity: Opportunity) -> OpportunityBase | None:
     """
     Transform a v1 Opportunity model to CG format.
 
@@ -213,12 +217,7 @@ def transform_opportunity_to_cg(v1_opportunity: Opportunity) -> OpportunityBase:
         ),
     }
 
-    # Transform
-    result = transform_search_result_to_cg(opp_data)
-    if result is None:
-        raise ValueError("Failed to transform v1 opportunity to CG format")
-
-    return result
+    return transform_search_result_to_cg(opp_data)
 
 
 def transform_search_result_to_cg(opp_data: dict) -> OpportunityBase | None:
@@ -336,7 +335,7 @@ def build_filter_info(filters: OppFilters | None) -> FilterInfo:
     Helper function to build FilterInfo from CommonGrants filters.
 
     Args:
-        filters: The CommonGrants filters to convert
+        filters: The CommonGrants filters to transform
 
     Returns:
         FilterInfo: The filter info for the response
@@ -368,22 +367,19 @@ def transform_search_request_from_cg(
     filters: OppFilters,
     sorting: OppSorting,
     pagination: PaginatedBodyParams,
-    search_query: str | None,
+    search_term: str | None,
 ) -> dict:
     """
-    Convert CommonGrants search parameters to v1 search format.
-
-    This function maps CommonGrants protocol parameters to the v1
-    search API format used by the search client.
+    Transform CG search request to v1 search format.
 
     Args:
-        filters: CommonGrants filters to convert
-        sorting: CommonGrants sorting parameters to convert
-        pagination: CommonGrants pagination parameters to convert
+        filters: CommonGrants filters to transform
+        sorting: CommonGrants sorting parameters to transform
+        pagination: CommonGrants pagination parameters to transform
         search_query: Optional search query string
 
     Returns:
-        dict: Legacy search parameters in the format expected by the search client
+        dict: search parameters in v1 format
     """
     # Convert pagination
     v1_pagination = {
@@ -428,11 +424,38 @@ def transform_search_request_from_cg(
         "experimental": {"scoring_rule": "default"},
     }
 
-    if search_query:
-        v1_params["query"] = search_query
+    if search_term:
+        v1_params["query"] = search_term
         v1_params["query_operator"] = "AND"
 
     if v1_filters:
         v1_params["filters"] = v1_filters
 
     return v1_params
+
+
+def transform_validation_error_from_cg(
+    validation_error: ValidationError,
+) -> List[ValidationErrorDetail]:
+    """Transform a CG ValidationError to v1 format.
+
+    Args:
+        ValidationError: CG error object
+
+    Returns:
+        List of v1 error objects
+    """
+    validation_details: List[ValidationErrorDetail] = []
+
+    # Handle pydantic ValidationError
+    # Pydantic structures errors as: [{'loc': ('field',), 'msg': 'message', 'type': 'error_type'}]
+    for error in validation_error.errors():
+        field_path = ".".join(str(loc) for loc in error["loc"]) if error["loc"] else None
+        message = error["msg"]
+
+        detail = ValidationErrorDetail(
+            field=field_path, message=message, type=ValidationErrorType.INVALID
+        )
+        validation_details.append(detail)
+
+    return validation_details
