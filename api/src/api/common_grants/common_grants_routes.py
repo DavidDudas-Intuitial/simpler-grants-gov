@@ -49,7 +49,7 @@ def list_opportunities(search_client: search.SearchClient, query_data: dict) -> 
 
     # Fetch data from service
     try:
-        pagination = PaginatedBodyParams(**query_data)
+        pagination = PaginatedBodyParams.model_validate(query_data)
         response_object = CommonGrantsOpportunityService.list_opportunities(
             search_client=search_client,
             pagination=pagination,
@@ -117,7 +117,7 @@ def search_opportunities(search_client: search.SearchClient, json_data: dict) ->
 
     try:
         # Transform json data to CG schema
-        search_request = OpportunitySearchRequest(**json_data)
+        search_request = OpportunitySearchRequest.model_validate(json_data)
 
         # Perform search
         response_object = CommonGrantsOpportunityService.search_opportunities(
