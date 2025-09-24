@@ -402,9 +402,7 @@ def transform_search_request_from_cg(
     v1_filters = {}
 
     if filters.status and filters.status.value:
-        v1_statuses = [
-            transform_status_from_cg(cg_status) for cg_status in filters.status.value
-        ]
+        v1_statuses = [transform_status_from_cg(cg_status) for cg_status in filters.status.value]
         v1_filters["opportunity_status"] = {"one_of": v1_statuses}
 
     if filters.close_date_range:

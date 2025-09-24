@@ -2,7 +2,6 @@
 
 import logging
 
-from common_grants_sdk.schemas.marshmallow import Error as ErrorSchema
 from common_grants_sdk.schemas.marshmallow import (
     OpportunitiesListResponse as OpportunitiesListResponseSchema,
 )
@@ -102,8 +101,8 @@ def search_opportunities(search_client: search.SearchClient, json_data: dict) ->
     try:
         validated_input = request_schema.load(json_data)
         search_request = OpportunitySearchRequest(**validated_input)
-    except Exception as e:
-        raise_flask_error(422, "Unable to validate search request schema") 
+    except Exception:
+        raise_flask_error(422, "Unable to validate search request schema")
 
     # Perform search
     response_object = CommonGrantsOpportunityService.search_opportunities(
