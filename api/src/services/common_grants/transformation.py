@@ -176,7 +176,7 @@ def validate_url(value: str | None) -> str | None:
     return None
 
 
-def transform_opportunity_to_cg(opportunity: Opportunity) -> OpportunityBase:
+def transform_opportunity_to_cg(v1_opportunity: Opportunity) -> OpportunityBase:
     """
     Transform a v1 Opportunity model to CG format.
 
@@ -187,15 +187,15 @@ def transform_opportunity_to_cg(opportunity: Opportunity) -> OpportunityBase:
         OpportunityBase: A CommonGrants Protocol model instance
     """
     # Extract opportunity summary
-    summary = _get_opportunity_summary(opportunity)
+    summary = _get_opportunity_summary(v1_opportunity)
 
     # Convert model to dict
     opp_data = {
-        "opportunity_id": opportunity.opportunity_id,
-        "opportunity_title": opportunity.opportunity_title or "Untitled Opportunity",
-        "opportunity_status": opportunity.opportunity_status,
-        "created_at": opportunity.created_at,
-        "updated_at": opportunity.updated_at,
+        "opportunity_id": v1_opportunity.opportunity_id,
+        "opportunity_title": v1_opportunity.opportunity_title or "Untitled Opportunity",
+        "opportunity_status": v1_opportunity.opportunity_status,
+        "created_at": v1_opportunity.created_at,
+        "updated_at": v1_opportunity.updated_at,
         "summary": (
             {
                 "summary_description": summary.summary_description if summary else None,
@@ -216,7 +216,7 @@ def transform_opportunity_to_cg(opportunity: Opportunity) -> OpportunityBase:
     # Transform
     result = transform_search_result_to_cg(opp_data)
     if result is None:
-        raise ValueError("Failed to transform opportunity to CommonGrants format")
+        raise ValueError("Failed to transform v1 opportunity to CG format")
 
     return result
 
@@ -239,36 +239,30 @@ def transform_search_result_to_cg(opp_data: dict) -> OpportunityBase | None:
         description = summary.get("summary_description") or "No description available"
 
         # Transform status
-        status_value = opp_data.get("opportunity_status", OpportunityStatus.POSTED)
-        opp_status = transform_status_to_cg(status_value)
+        v1_status = opp_data.get("opportunity_status", OpportunityStatus.POSTED)
+        cg_status = transform_status_to_cg(v1_status)
 
         # Create timeline
+        post_date = summary.get("post_date") if isinstance(summary, dict) else summary.post_date
+        close_date = summary.get("close_date") if isinstance(summary, dict) else summary.close_date
+        # TODO: summary.close_date is not the correct value! deadlines are stored in competitions
         timeline = OppTimeline(
             postDate=(
                 SingleDateEvent(
                     name="Opportunity Posted",
-                    date=_transform_date_to_cg(
-                        summary.get("post_date") if isinstance(summary, dict) else summary.post_date
-                    ),
+                    date=_transform_date_to_cg(post_date),
                     description="Date when the opportunity was first posted",
                 )
-                if summary
-                and (summary.get("post_date") if isinstance(summary, dict) else summary.post_date)
+                if post_date
                 else None
             ),
             closeDate=(
                 SingleDateEvent(
                     name="Application Deadline",
-                    # TODO: close_date is not the correct value, deadlines are stored in competitions
-                    date=_transform_date_to_cg(
-                        summary.get("close_date")
-                        if isinstance(summary, dict)
-                        else summary.close_date
-                    ),
+                    date=_transform_date_to_cg(close_date),
                     description="Deadline for submitting applications",
                 )
-                if summary
-                and (summary.get("close_date") if isinstance(summary, dict) else summary.close_date)
+                if close_date
                 else None
             ),
         )
@@ -298,7 +292,7 @@ def transform_search_result_to_cg(opp_data: dict) -> OpportunityBase | None:
             id=opportunity_id,
             title=title,
             description=description,
-            status=OppStatus(value=opp_status),
+            status=OppStatus(value=cg_status),
             keyDates=timeline,
             funding=OppFunding(
                 totalAmountAvailable=total_amount_money,
@@ -409,7 +403,7 @@ def transform_search_request_from_cg(
 
     if filters.status and filters.status.value:
         v1_statuses = [
-            transform_status_from_cg(status_value) for status_value in filters.status.value
+            transform_status_from_cg(cg_status) for cg_status in filters.status.value
         ]
         v1_filters["opportunity_status"] = {"one_of": v1_statuses}
 
