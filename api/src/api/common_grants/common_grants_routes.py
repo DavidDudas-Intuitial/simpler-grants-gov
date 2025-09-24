@@ -21,43 +21,12 @@ import src.adapters.db.flask_db as flask_db
 import src.adapters.search as search
 import src.adapters.search.flask_opensearch as flask_opensearch
 from src.api.common_grants.common_grants_blueprint import common_grants_blueprint
+from src.api.route_utils import raise_flask_error
 from src.auth.multi_auth import api_key_multi_auth, api_key_multi_auth_security_schemes
 from src.logging.flask_logger import add_extra_data_to_current_request_logs
 from src.services.common_grants.opportunity_service import CommonGrantsOpportunityService
 
 logger = logging.getLogger(__name__)
-
-
-def generate_422_error(e: Exception) -> tuple[dict, int]:
-    """Generate a 422 error response for validation failures."""
-    error_schema = ErrorSchema()
-    return (
-        error_schema.dump(
-            {
-                "status": 422,
-                "message": "The server cannot parse the request",
-                "errors": [{"field": "request", "message": str(e)}],
-            }
-        ),
-        422,
-    )
-
-
-def generate_404_error(
-    field: str, message: str = "The server cannot find the requested resource"
-) -> tuple[dict, int]:
-    """Generate a 404 error response for resource not found."""
-    error_schema = ErrorSchema()
-    return (
-        error_schema.dump(
-            {
-                "status": 404,
-                "message": message,
-                "errors": [{"field": field, "message": message}],
-            }
-        ),
-        404,
-    )
 
 
 @common_grants_blueprint.get("/opportunities")
@@ -107,7 +76,7 @@ def get_opportunity(db_session: db.Session, oppId: str) -> tuple[dict, int]:
 
     # Check for not found condition
     if not response_object:
-        return generate_404_error("oppId")
+        raise_flask_error(404, "The server cannot find the requested resource")
 
     return response_object, 200
 
@@ -134,7 +103,7 @@ def search_opportunities(search_client: search.SearchClient, json_data: dict) ->
         validated_input = request_schema.load(json_data)
         search_request = OpportunitySearchRequest(**validated_input)
     except Exception as e:
-        return generate_422_error(e)
+        raise_flask_error(422, "Unable to validate search request schema") 
 
     # Perform search
     response_object = CommonGrantsOpportunityService.search_opportunities(
