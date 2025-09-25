@@ -1,6 +1,7 @@
 """CommonGrants Protocol routes."""
 
 import logging
+from http import HTTPStatus
 from uuid import UUID
 
 from common_grants_sdk.schemas.marshmallow import (
@@ -39,10 +40,12 @@ logger = logging.getLogger(__name__)
     summary="List opportunities",
     description="Get a paginated list of opportunities, sorted by `lastModifiedAt` with most recent first.",
     security=api_key_multi_auth_security_schemes,
-    responses=[200],
+    responses=[HTTPStatus.OK],
 )
 @flask_opensearch.with_search_client()
-def list_opportunities(search_client: search.SearchClient, query_data: dict) -> tuple[dict, int]:
+def list_opportunities(
+    search_client: search.SearchClient, query_data: dict
+) -> tuple[OpportunitiesListResponseSchema, HTTPStatus]:
     """Get a paginated list of opportunities."""
     add_extra_data_to_current_request_logs(query_data)
     logger.info("GET /common-grants/opportunities/")
@@ -55,10 +58,12 @@ def list_opportunities(search_client: search.SearchClient, query_data: dict) -> 
             pagination=pagination,
         )
     except ValidationError as e:
-        validation_details = transform_validation_error_from_cg(e)
-        raise_flask_error(422, "Validation error", validation_issues=validation_details)
+        error_details = transform_validation_error_from_cg(e)
+        raise_flask_error(
+            HTTPStatus.UNPROCESSABLE_ENTITY, "Validation error", validation_issues=error_details
+        )
 
-    return response_object, 200
+    return response_object, HTTPStatus.OK
 
 
 @common_grants_blueprint.get("/opportunities/<oppId>")
@@ -68,10 +73,12 @@ def list_opportunities(search_client: search.SearchClient, query_data: dict) -> 
     summary="View opportunity details",
     description="View details about an opportunity",
     security=api_key_multi_auth_security_schemes,
-    responses=[200, 404],
+    responses=[HTTPStatus.OK, HTTPStatus.NOT_FOUND],
 )
 @flask_db.with_db_session()
-def get_opportunity(db_session: db.Session, oppId: str) -> tuple[dict, int]:
+def get_opportunity(
+    db_session: db.Session, oppId: str
+) -> tuple[OpportunityResponseSchema, HTTPStatus]:
     """Get a specific opportunity by ID."""
     add_extra_data_to_current_request_logs({"oppId": oppId})
     logger.info("GET /common-grants/opportunities/{oppId}")
@@ -82,21 +89,23 @@ def get_opportunity(db_session: db.Session, oppId: str) -> tuple[dict, int]:
     try:
         opp_uuid = UUID(oppId)
     except ValueError:
-        raise_flask_error(404, message_404)
+        raise_flask_error(HTTPStatus.NOT_FOUND, message_404)
 
     # Fetch data from service
     try:
         with db_session.begin():
             response_object = CommonGrantsOpportunityService.get_opportunity(db_session, opp_uuid)
     except ValidationError as e:
-        validation_details = transform_validation_error_from_cg(e)
-        raise_flask_error(422, "Validation error", validation_issues=validation_details)
+        error_details = transform_validation_error_from_cg(e)
+        raise_flask_error(
+            HTTPStatus.UNPROCESSABLE_ENTITY, "Validation error", validation_issues=error_details
+        )
 
     # Check for not found condition
     if not response_object:
-        raise_flask_error(404, message_404)
+        raise_flask_error(HTTPStatus.NOT_FOUND, message_404)
 
-    return response_object, 200
+    return response_object, HTTPStatus.OK
 
 
 @common_grants_blueprint.post("/opportunities/search")
@@ -107,27 +116,29 @@ def get_opportunity(db_session: db.Session, oppId: str) -> tuple[dict, int]:
     summary="Search opportunities",
     description="Search for opportunities based on the provided filters",
     security=api_key_multi_auth_security_schemes,
-    responses=[200],
+    responses=[HTTPStatus.OK],
 )
 @flask_opensearch.with_search_client()
-def search_opportunities(search_client: search.SearchClient, json_data: dict) -> tuple[dict, int]:
+def search_opportunities(
+    search_client: search.SearchClient, json_data: dict
+) -> tuple[OpportunitiesSearchResponseSchema, HTTPStatus]:
     """Search for opportunities based on the provided filters."""
     add_extra_data_to_current_request_logs(json_data)
     logger.info("POST /common-grants/opportunities/search")
 
     try:
-        # Transform json data to CG schema
+        # Fetch data from service
         search_request = OpportunitySearchRequest.model_validate(json_data)
-
-        # Perform search
         response_object = CommonGrantsOpportunityService.search_opportunities(
             search_client,
             search_request,
         )
     except ValidationError as e:
-        validation_details = transform_validation_error_from_cg(e)
+        error_details = transform_validation_error_from_cg(e)
         raise_flask_error(
-            422, "Unable to process search request", validation_issues=validation_details
+            HTTPStatus.UNPROCESSABLE_ENTITY,
+            "Unable to process search request",
+            validation_issues=error_details,
         )
 
-    return response_object, 200
+    return response_object, HTTPStatus.OK

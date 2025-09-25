@@ -1,6 +1,7 @@
 """CommonGrants Protocol opportunity service."""
 
 import logging
+from http import HTTPStatus
 from uuid import UUID
 
 from common_grants_sdk.schemas.marshmallow import (
@@ -52,24 +53,22 @@ class CommonGrantsOpportunityService:
         """Get a specific opportunity by ID."""
 
         # Get response data from v1 service
-        opportunity_data = get_opportunity(db_session, opportunity_id)
-
-        # Handle not-found condition
-        if not opportunity_data:
+        opportunity_data_v1 = get_opportunity(db_session, opportunity_id)
+        if not opportunity_data_v1:
             return None
 
-        # Transform response data to CG format
-        opportunity_data_cg = transform_opportunity_to_cg(opportunity_data)
+        # Transform response data to CG model
+        opportunity_data_cg = transform_opportunity_to_cg(opportunity_data_v1)
         opportunity_response = OpportunityResponse(
-            status=200,
+            status=HTTPStatus.OK,
             message="Success",
             data=opportunity_data_cg,
         )
 
-        # Transform response data from pydantic to marshmallow
+        # Transform response data from CG pydantic to CG marshmallow
+        response_json = opportunity_response.model_dump(by_alias=True, mode="json")
         response_object = OpportunityResponseSchema()
-        opportunity_json = opportunity_response.model_dump(by_alias=True, mode="json")
-        validated_response = response_object.load(opportunity_json)
+        validated_response = response_object.load(response_json)
 
         return validated_response
 
@@ -87,19 +86,19 @@ class CommonGrantsOpportunityService:
         # Convert search request to v1 format
         v1_search_params = transform_search_request_from_cg(filters, sorting, pagination, "")
 
-        # Get response data
+        # Get response data from v1 service
         opportunity_data, aggregations, pagination_data = search_opportunities(
             search_client, v1_search_params
         )
 
-        # Transform response data to CG format
+        # Transform response data to CG model
         opportunity_data_cg = []
         for item in opportunity_data:
             opportunity = transform_search_result_to_cg(item)
             if opportunity:
                 opportunity_data_cg.append(opportunity)
         opportunity_response = OpportunitiesListResponse(
-            status=200,
+            status=HTTPStatus.OK,
             message="Opportunities fetched successfully",
             items=opportunity_data_cg,
             pagination_info=PaginatedResultsInfo(
@@ -110,10 +109,10 @@ class CommonGrantsOpportunityService:
             ),
         )
 
-        # Transform response data from pydantic to marshmallow
+        # Transform response data from CG pydantic to CG marshmallow
+        response_json = opportunity_response.model_dump(by_alias=True, mode="json")
         response_object = OpportunitiesListResponseSchema()
-        opportunity_json = opportunity_response.model_dump(by_alias=True, mode="json")
-        validated_response = response_object.load(opportunity_json)
+        validated_response = response_object.load(response_json)
 
         return validated_response
 
@@ -129,22 +128,20 @@ class CommonGrantsOpportunityService:
         sorting = search_request.sorting or OppSorting(sort_by=OppSortBy.LAST_MODIFIED_AT)
         pagination = search_request.pagination or PaginatedBodyParams()
 
-        # Convert search request to v1 format
+        # Get response data from v1 service
         v1_search_params = transform_search_request_from_cg(filters, sorting, pagination, "")
-
-        # Get response data
         opportunity_data, aggregations, pagination_data = search_opportunities(
             search_client, v1_search_params
         )
 
-        # Transform response data to CG format
+        # Transform response data to CG model
         opportunity_data_cg = []
         for item in opportunity_data:
             opportunity = transform_search_result_to_cg(item)
             if opportunity:
                 opportunity_data_cg.append(opportunity)
         opportunity_response = OpportunitiesSearchResponse(
-            status=200,
+            status=HTTPStatus.OK,
             message="Opportunities searched successfully using search client",
             items=opportunity_data_cg,
             pagination_info=PaginatedResultsInfo(
@@ -161,9 +158,9 @@ class CommonGrantsOpportunityService:
             filter_info=build_filter_info(filters),
         )
 
-        # Transform response data from pydantic to marshmallow
+        # Transform response data from CG pydantic to CG marshmallow
+        response_json = opportunity_response.model_dump(by_alias=True, mode="json")
         response_object = OpportunitiesSearchResponseSchema()
-        opportunity_json = opportunity_response.model_dump(by_alias=True, mode="json")
-        validated_response = response_object.load(opportunity_json)
+        validated_response = response_object.load(response_json)
 
         return validated_response
