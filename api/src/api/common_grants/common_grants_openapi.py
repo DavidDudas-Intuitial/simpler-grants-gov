@@ -2,10 +2,7 @@
 
 PROBLEM
 -------
-The CommonGrants CLI validation tool expects OpenAPI specs to follow specific composition patterns
-that are compatible with the CommonGrants protocol base specification. However, APIFlask (our web
-framework) generates OpenAPI specs with different composition patterns that cause spec validation
-to fail.
+The CommonGrants CLI validation tool expects OpenAPI specs to follow specific composition patterns that are compatible with the CommonGrants protocol base specification. However, APIFlask (our web framework) generates OpenAPI specs with different composition patterns that cause spec validation to fail.
 
 Specifically, APIFlask generates schemas like this:
 ```yaml
@@ -27,18 +24,15 @@ This causes opaque validation errors like:
 
 SOLUTION
 --------
-Post-process the generated OpenAPI spec to transform the composition patterns from APIFlask's
-format to the CommonGrants protocol's expected format. This is done by:
+Post-process the generated OpenAPI spec to transform the composition patterns from APIFlask's format to the CommonGrants protocol's expected format. This is done by:
 
-1. **Schema Inlining**: Replace `$ref` references in response schemas with the actual schema
-   definitions to enable composition pattern fixes.
+1. **Schema Inlining**: Replace `$ref` references in response schemas with the actual schema definitions to enable composition pattern fixes.
 
 2. **Composition Pattern Fixing**: Recursively find and fix the problematic pattern:
    - Find: `type: [object]` + `allOf` (or `type: "object"` + `allOf`)
    - Fix: Remove the `type` field, keep only `allOf`
 
-3. **Generic Pattern Detection**: Use recursive traversal to find and fix the pattern anywhere
-   in the schema structure, regardless of property names or nesting levels.
+3. **Generic Pattern Detection**: Use recursive traversal to find and fix the pattern anywhere in the schema structure, regardless of property names or nesting levels.
 
 IMPLEMENTATION
 --------------
@@ -87,10 +81,9 @@ def transform_spec_composition_to_cg(spec: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def fix_schema_composition(schema: Dict[str, Any], all_schemas: Dict[str, Any]) -> Dict[str, Any]:
-    """Fix schema composition to match CommonGrants patterns.
-
-    Recursively finds and fixes the problematic pattern: type: [object] + allOf
-    This should be just: allOf (without the type field)
+    """
+    Fix schema composition to match CommonGrants patterns.
+    Recursively finds and fixes the problematic pattern: `type: [object] + allOf`
     """
     if not isinstance(schema, dict):
         return schema  # type: ignore[unreachable]
